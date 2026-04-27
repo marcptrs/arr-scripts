@@ -1,5 +1,5 @@
 #!/usr/bin/with-contenv bash
-scriptVersion="2.50"
+scriptVersion="2.51"
 scriptName="Audio"
 
 ### Import Settings
@@ -161,6 +161,20 @@ PY
   else
     echo 999
   fi
+}
+
+RunDeemix () {
+	if command -v deemix >/dev/null 2>&1; then
+		deemix "$@"
+		return $?
+	fi
+
+	if command -v python3 >/dev/null 2>&1; then
+		python3 -m deemix "$@"
+		return $?
+	fi
+
+	return 127
 }
 
 Configuration () {
@@ -599,7 +613,7 @@ DownloadProcess () {
 			if [ -z $arlToken ]; then
 				DownloadClientFreyr $1
 			else
-				deemix -b $deemixQuality -p "$audioPath"/incomplete "https://www.deezer.com/album/$1" 2>&1 | tee -a "/config/logs/$logFileName"
+				RunDeemix -b $deemixQuality -p "$audioPath"/incomplete "https://www.deezer.com/album/$1" 2>&1 | tee -a "/config/logs/$logFileName"
 			fi
 			
 			if [ -d "/tmp/deemix-imgs" ]; then
@@ -636,7 +650,7 @@ DownloadProcess () {
 				if [ -z $arlToken ]; then
 					DownloadClientFreyr $1
 				else
-					deemix -b $deemixQuality -p "$audioPath"/incomplete "https://www.deezer.com/album/$1" 2>&1 | tee -a "/config/logs/$logFileName"
+					RunDeemix -b $deemixQuality -p "$audioPath"/incomplete "https://www.deezer.com/album/$1" 2>&1 | tee -a "/config/logs/$logFileName"
 				fi
     			fi
        		fi
@@ -1043,7 +1057,14 @@ DeemixClientSetup () {
 DeezerClientTest () {
 	log "DEEZER :: deemix client setup verification..."
 
-	deemix -b 128 -p $audioPath/incomplete "https://www.deezer.com/album/$deezerClientTestDownloadId"  2>&1 | tee -a "/config/logs/$logFileName"
+	if ! RunDeemix -b 128 -p $audioPath/incomplete "https://www.deezer.com/album/$deezerClientTestDownloadId" 2>&1 | tee -a "/config/logs/$logFileName"; then
+		log "DEEZER :: ERROR :: deemix client is not installed/available in PATH"
+		log "DEEZER :: ERROR :: Install deemix client or switch dlClientSource to tidal/both"
+		deezerClientTest="fail"
+		log "Script sleeping for $audioScriptInterval..."
+		sleep $audioScriptInterval
+		exit
+	fi
 	if [ -d "/tmp/deemix-imgs" ]; then
 		rm -rf /tmp/deemix-imgs
 	fi

@@ -1,7 +1,7 @@
 #!/usr/bin/with-contenv bash
 set -euo pipefail
 
-scriptVersion="1.4.8"
+scriptVersion="1.4.9"
 SMA_PATH="/usr/local/sma"
 
 setupReady="true"
@@ -92,7 +92,8 @@ uv pip install --system --upgrade --no-cache-dir --break-system-packages \
   requests \
   mutagen \
   python-telegram-bot \
-  apprise
+  apprise \
+  deemix
 
 echo "************ setup SMA ************"
 if [ -d "${SMA_PATH}"  ]; then
