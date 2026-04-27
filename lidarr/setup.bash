@@ -1,19 +1,45 @@
 #!/usr/bin/with-contenv bash
-scriptVersion="1.4.6"
+set -euo pipefail
+
+scriptVersion="1.4.7"
 SMA_PATH="/usr/local/sma"
 
+setupReady="true"
 if [ -f /config/setup_version.txt ]; then
   source /config/setup_version.txt
-  if [ "$scriptVersion" == "$setupversion" ]; then
-    if apk --no-cache list | grep installed | grep opus-tools | read; then
-      echo "Setup was previously completed, skipping..."
-      exit
+else
+  setupReady="false"
+fi
+
+if [ "${setupversion:-}" == "$scriptVersion" ]; then
+  if ! apk --no-cache list | grep installed | grep opus-tools | read; then
+    setupReady="false"
+  fi
+
+  for requiredFile in \
+    /config/extended/functions \
+    /config/extended/beets-config.yaml \
+    /config/extended.conf \
+    /custom-services.d/Audio \
+    /custom-services.d/Video; do
+    if [ ! -s "$requiredFile" ]; then
+      echo "Setup check: missing required file $requiredFile"
+      setupReady="false"
     fi
+  done
+
+  if ! python3 -c 'import colorama, yt_dlp, beets' >/dev/null 2>&1; then
+    echo "Setup check: required python packages missing, re-running setup"
+    setupReady="false"
+  fi
+
+  if [ "$setupReady" == "true" ]; then
+    echo "Setup was previously completed, skipping..."
+    exit
   fi
 fi
-echo "setupversion=$scriptVersion" > /config/setup_version.txt
 
-set -euo pipefail
+echo "setupversion=$scriptVersion" > /config/setup_version.txt
 
 echo "*** install packages ***" && \
 apk add -U --upgrade --no-cache \
