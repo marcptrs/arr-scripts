@@ -1,5 +1,5 @@
 #!/usr/bin/with-contenv bash
-scriptVersion="2.49"
+scriptVersion="2.50"
 scriptName="Audio"
 
 ### Import Settings
@@ -123,16 +123,34 @@ CalcDamerauDistance () {
 
   diff="$($pyBin - "$leftNorm" "$rightNorm" <<'PY' 2>/dev/null
 import sys
-try:
-    from pyxdameraulevenshtein import damerau_levenshtein_distance
-except Exception:
-    print("999")
-    sys.exit(0)
 
 left = sys.argv[1] if len(sys.argv) > 1 else ""
 right = sys.argv[2] if len(sys.argv) > 2 else ""
+
+if not left or not right:
+    print("999")
+    sys.exit(0)
+
+# Prefer optimized implementation when available
 try:
+    from pyxdameraulevenshtein import damerau_levenshtein_distance
     print(damerau_levenshtein_distance(left, right))
+    sys.exit(0)
+except Exception:
+    pass
+
+# Fallback to pure-Python Levenshtein distance
+try:
+    prev = list(range(len(right) + 1))
+    for i, c1 in enumerate(left, start=1):
+        curr = [i]
+        for j, c2 in enumerate(right, start=1):
+            insertions = prev[j] + 1
+            deletions = curr[j - 1] + 1
+            substitutions = prev[j - 1] + (c1 != c2)
+            curr.append(min(insertions, deletions, substitutions))
+        prev = curr
+    print(prev[-1])
 except Exception:
     print("999")
 PY

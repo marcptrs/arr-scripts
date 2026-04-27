@@ -57,6 +57,7 @@ apk add -U --upgrade --no-cache \
   opustags \
   python3-dev \
   libc-dev \
+  cmake \
   uv \
   parallel \
   npm && \
@@ -81,7 +82,18 @@ uv pip install --system --upgrade --no-cache-dir --break-system-packages \
   tidal-dl \
   deemix \
   langdetect \
-  apprise  && \
+  apprise || true
+
+# Ensure runtime-critical python modules exist even if optional builds fail
+uv pip install --system --upgrade --no-cache-dir --break-system-packages \
+  yt-dlp \
+  pyxDamerauLevenshtein \
+  colorama \
+  requests \
+  mutagen \
+  python-telegram-bot \
+  apprise
+
 echo "************ setup SMA ************"
 if [ -d "${SMA_PATH}"  ]; then
   rm -rf "${SMA_PATH}"
