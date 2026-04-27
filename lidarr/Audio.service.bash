@@ -1,5 +1,5 @@
 #!/usr/bin/with-contenv bash
-scriptVersion="2.48"
+scriptVersion="2.49"
 scriptName="Audio"
 
 ### Import Settings
@@ -74,6 +74,75 @@ verifyConfig () {
   audioPath="$downloadPath/audio"
 
 
+}
+
+NormalizeTitleForCompare () {
+  echo "$1" \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/\([^)]*\)//g; s/\[[^]]*\]//g; s/\b(deluxe|expanded|remaster(ed)?|anniversary|edition|version|bonus|explicit|clean)\b//g; s/^[[:space:]]*(the|a|an)[[:space:]]+//; s/[^[:alnum:]]//g'
+}
+
+CalcDamerauDistance () {
+  leftNorm="$(NormalizeTitleForCompare "$1")"
+  rightNorm="$(NormalizeTitleForCompare "$2")"
+
+  if [ -z "$leftNorm" ] || [ -z "$rightNorm" ]; then
+    echo 999
+    return
+  fi
+
+  if [ "$leftNorm" == "$rightNorm" ]; then
+    echo 0
+    return
+  fi
+
+  leftLen=${#leftNorm}
+  rightLen=${#rightNorm}
+  shorterLen=$leftLen
+  if [ "$rightLen" -lt "$leftLen" ]; then
+    shorterLen=$rightLen
+  fi
+
+  # containment shortcut for common title variants, but avoid very short ambiguous titles
+  if [ "$shorterLen" -ge 8 ]; then
+    if [[ "$leftNorm" == *"$rightNorm"* ]] || [[ "$rightNorm" == *"$leftNorm"* ]]; then
+      echo 2
+      return
+    fi
+  fi
+
+  pyBin=""
+  if command -v python3 >/dev/null 2>&1; then
+    pyBin="python3"
+  elif command -v python >/dev/null 2>&1; then
+    pyBin="python"
+  else
+    echo 999
+    return
+  fi
+
+  diff="$($pyBin - "$leftNorm" "$rightNorm" <<'PY' 2>/dev/null
+import sys
+try:
+    from pyxdameraulevenshtein import damerau_levenshtein_distance
+except Exception:
+    print("999")
+    sys.exit(0)
+
+left = sys.argv[1] if len(sys.argv) > 1 else ""
+right = sys.argv[2] if len(sys.argv) > 2 else ""
+try:
+    print(damerau_levenshtein_distance(left, right))
+except Exception:
+    print("999")
+PY
+)"
+
+  if echo "$diff" | grep -Eq '^[0-9]+$'; then
+    echo "$diff"
+  else
+    echo 999
+  fi
 }
 
 Configuration () {
@@ -1491,7 +1560,7 @@ ArtistDeezerSearch () {
 		
 		log "$1 :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Artist Search :: Deezer :: $type :: $lidarrReleaseTitle :: $lidarrAlbumReleaseTitleClean vs $deezerAlbumTitleClean :: Checking for Match..."
 		log "$1 :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Artist Search :: Deezer :: $type :: $lidarrReleaseTitle :: $lidarrAlbumReleaseTitleClean vs $deezerAlbumTitleClean :: Calculating Damerau-Levenshtein distance..."
-		diff=$(python -c "from pyxdameraulevenshtein import damerau_levenshtein_distance; print(damerau_levenshtein_distance(\"${lidarrAlbumReleaseTitleClean,,}\", \"${deezerAlbumTitleClean,,}\"))" 2>/dev/null)
+		diff="$(CalcDamerauDistance "$lidarrAlbumReleaseTitleClean" "$deezerAlbumTitleClean")"
 		if [ "$diff" -le "$matchDistance" ]; then
 			log "$1 :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Artist Search :: Deezer :: $type :: $lidarrReleaseTitle :: $lidarrAlbumReleaseTitleClean vs $deezerAlbumTitleClean :: Deezer MATCH Found :: Calculated Difference = $diff"
 
@@ -1568,7 +1637,7 @@ FuzzyDeezerSearch () {
 
 			log "$1 :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Fuzzy Search :: Deezer :: $type :: $lidarrReleaseTitle :: $lidarrAlbumReleaseTitleClean vs $deezerAlbumTitleClean :: Checking for Match..."
 			log "$1 :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Fuzzy Search :: Deezer :: $type :: $lidarrReleaseTitle :: $lidarrAlbumReleaseTitleClean vs $deezerAlbumTitleClean :: Calculating Damerau-Levenshtein distance..."
-			diff=$(python -c "from pyxdameraulevenshtein import damerau_levenshtein_distance; print(damerau_levenshtein_distance(\"${lidarrAlbumReleaseTitleClean,,}\", \"${deezerAlbumTitleClean,,}\"))" 2>/dev/null)
+			diff="$(CalcDamerauDistance "$lidarrAlbumReleaseTitleClean" "$deezerAlbumTitleClean")"
 			if [ "$diff" -le "$matchDistance" ]; then
 				log "$1 :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Fuzzy Search :: Deezer :: $type :: $lidarrReleaseTitle :: $lidarrAlbumReleaseTitleClean vs $deezerAlbumTitleClean :: Deezer MATCH Found :: Calculated Difference = $diff"
 				log "$1 :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Fuzzy Search :: Deezer :: $type :: $lidarrReleaseTitle :: Downloading $deezerAlbumTrackCount Tracks :: $deezerAlbumTitle ($downloadedReleaseYear)"
@@ -1640,7 +1709,7 @@ ArtistTidalSearch () {
 
 		log "$1 :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Artist Search :: Tidal :: $type :: $lidarrReleaseTitle :: $lidarrAlbumReleaseTitleClean vs $tidalAlbumTitleClean :: Checking for Match..."
 		log "$1 :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Artist Search :: Tidal :: $type :: $lidarrReleaseTitle :: $lidarrAlbumReleaseTitleClean vs $tidalAlbumTitleClean :: Calculating Damerau-Levenshtein distance..."
-		diff=$(python -c "from pyxdameraulevenshtein import damerau_levenshtein_distance; print(damerau_levenshtein_distance(\"${lidarrAlbumReleaseTitleClean,,}\", \"${tidalAlbumTitleClean,,}\"))" 2>/dev/null)
+		diff="$(CalcDamerauDistance "$lidarrAlbumReleaseTitleClean" "$tidalAlbumTitleClean")"
 		if [ "$diff" -le "$matchDistance" ]; then
 			log "$1 :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Artist Search :: Tidal :: $type :: $lidarrReleaseTitle :: $lidarrAlbumReleaseTitleClean vs $tidalAlbumTitleClean :: Tidal MATCH Found :: Calculated Difference = $diff"
 
@@ -1698,7 +1767,7 @@ FuzzyTidalSearch () {
 
 			log "$1 :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Fuzzy Search :: Tidal :: $type :: $lidarrReleaseTitle :: $lidarrAlbumReleaseTitleClean vs $tidalAlbumTitleClean :: Checking for Match..."
 			log "$1 :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Fuzzy Search :: Tidal :: $type :: $lidarrReleaseTitle :: $lidarrAlbumReleaseTitleClean vs $tidalAlbumTitleClean :: Calculating Damerau-Levenshtein distance..."
-			diff=$(python -c "from pyxdameraulevenshtein import damerau_levenshtein_distance; print(damerau_levenshtein_distance(\"${lidarrAlbumReleaseTitleClean,,}\", \"${tidalAlbumTitleClean,,}\"))" 2>/dev/null)
+			diff="$(CalcDamerauDistance "$lidarrAlbumReleaseTitleClean" "$tidalAlbumTitleClean")"
 			if [ "$diff" -le "$matchDistance" ]; then
 				log "$1 :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Fuzzy Search :: Tidal :: $type :: $lidarrReleaseTitle :: $lidarrAlbumReleaseTitleClean vs $tidalAlbumTitleClean :: Tidal MATCH Found :: Calculated Difference = $diff"
 				log "$1 :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Fuzzy Search :: Tidal :: $type :: $lidarrReleaseTitle :: Downloading $downloadedTrackCount Tracks :: $tidalAlbumTitle ($downloadedReleaseYear)"
