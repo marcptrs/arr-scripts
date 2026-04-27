@@ -39,15 +39,18 @@ verifyApiAccess () {
   do
     arrApiTest=""
     arrApiVersion=""
-    if [ -z "$arrApiTest" ]; then
-      arrApiVersion="v3"
-      arrApiTest="$(curl -s "$arrUrl/api/$arrApiVersion/system/status?apikey=$arrApiKey" | jq -r .instanceName)"
-    fi
-    if [ -z "$arrApiTest" ]; then
-      arrApiVersion="v1"
-      arrApiTest="$(curl -s "$arrUrl/api/$arrApiVersion/system/status?apikey=$arrApiKey" | jq -r .instanceName)"
-    fi
-    if [ ! -z "$arrApiTest" ]; then
+
+    # Check newest -> oldest and select the first valid API version
+    for apiVersion in v5 v4 v3 v2 v1; do
+      arrApiTest="$(curl -s "$arrUrl/api/$apiVersion/system/status?apikey=$arrApiKey" | jq -r '.instanceName // empty' 2>/dev/null)"
+      if [ -n "$arrApiTest" ]; then
+        arrApiVersion="$apiVersion"
+        break
+      fi
+    done
+
+    if [ -n "$arrApiTest" ] && [ -n "$arrApiVersion" ]; then
+      log "Detected API version: $arrApiVersion"
       break
     else
       log "$arrName is not ready, sleeping until valid response..."

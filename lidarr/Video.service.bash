@@ -1,5 +1,5 @@
 #!/usr/bin/with-contenv bash
-scriptVersion="4.0"
+scriptVersion="4.1"
 scriptName="Video"
 
 ### Import Settings
@@ -16,6 +16,26 @@ verifyConfig () {
 
 	if [ -z "$disableImvd" ]; then
 		disableImvd="false"
+	fi
+
+	if [ -z "$enableYoutubeDirect" ]; then
+		enableYoutubeDirect="false"
+	fi
+
+	if [ -z "$youtubeDirectMaxVideosPerArtist" ]; then
+		youtubeDirectMaxVideosPerArtist="25"
+	fi
+
+	if [ -z "$youtubeDirectRefreshDays" ]; then
+		youtubeDirectRefreshDays="3"
+	fi
+
+	if [ -z "$enableYoutubeSearchFallback" ]; then
+		enableYoutubeSearchFallback="false"
+	fi
+
+	if [ -z "$youtubeSearchFallbackMaxResults" ]; then
+		youtubeSearchFallbackMaxResults="15"
 	fi
 
 	if [ "$enableVideo" != "true" ]; then
@@ -40,7 +60,7 @@ verifyConfig () {
 
 	if [ -z "$videoPath" ]; then
 		log "ERROR: videoPath is not configured via the \"/config/extended.conf\" config file..."
-		log "Updated your \"/config/extended.conf\" file with the latest options, see: https://github.com/RandomNinjaAtk/arr-scripts/blob/main/lidarr/extended.conf"
+		log "Updated your \"/config/extended.conf\" file with the latest options, see: https://github.com/marcptrs/arr-scripts/blob/main/lidarr/extended.conf"
 		log "Sleeping (infinity)"
 		sleep infinity
 	fi
@@ -58,8 +78,8 @@ Configuration () {
 	log " May the beats be with you!"
 	log "-----------------------------------------------------------------------------"
 	log "Donate: https://github.com/sponsors/RandomNinjaAtk"
-	log "Project: https://github.com/RandomNinjaAtk/arr-scripts"
-	log "Support: https://github.com/RandomNinjaAtk/arr-scripts/discussions"
+	log "Project: https://github.com/marcptrs/arr-scripts"
+	log "Support: https://github.com/marcptrs/arr-scripts/discussions"
 	log "-----------------------------------------------------------------------------"
 	sleep 5
 	log ""
@@ -85,6 +105,15 @@ Configuration () {
 	fi
 	if [ -n "$videoDownloadTag" ]; then
 		log "CONFIG :: Video download tag set to: $videoDownloadTag"
+	fi
+	log "CONFIG :: YouTube direct support enabled: $enableYoutubeDirect"
+	if [ "$enableYoutubeDirect" == "true" ]; then
+		log "CONFIG :: YouTube direct max videos per artist: $youtubeDirectMaxVideosPerArtist"
+		log "CONFIG :: YouTube direct refresh days: $youtubeDirectRefreshDays"
+		log "CONFIG :: YouTube search fallback enabled: $enableYoutubeSearchFallback"
+		if [ "$enableYoutubeSearchFallback" == "true" ]; then
+			log "CONFIG :: YouTube search fallback max results: $youtubeSearchFallbackMaxResults"
+		fi
 	fi
 	if [ -f "/config/cookies.txt" ]; then
 		cookiesFile="/config/cookies.txt"
@@ -391,6 +420,9 @@ VideoNfoWriter () {
 			fi
 		done
 	fi
+	if [ "$5" = "youtube" ]; then
+		echo "	<artist>$lidarrArtistName</artist>" >> "$nfo"
+	fi
 	echo "	<albumArtistCredits>" >> "$nfo"
 	echo "		<artist>$lidarrArtistName</artist>" >> "$nfo"
 	echo "		<musicBrainzArtistID>$lidarrArtistMusicbrainzId</musicBrainzArtistID>" >> "$nfo"
@@ -483,6 +515,164 @@ AddFeaturedVideoArtists () {
 	done
 }
 
+YouTubeDirectProcessArtist () {
+	if [ "$enableYoutubeDirect" != "true" ]; then
+		return
+	fi
+
+	if [ ! -d "/config/extended/logs/video/youtube-complete" ]; then
+		mkdir -p "/config/extended/logs/video/youtube-complete"
+		chmod 777 "/config/extended/logs/video/youtube-complete"
+	fi
+
+	youtubeCompleteLog="/config/extended/logs/video/youtube-complete/$lidarrArtistMusicbrainzId"
+	if [ -f "$youtubeCompleteLog" ]; then
+		if [ -z "$(find "$youtubeCompleteLog" -mtime +$youtubeDirectRefreshDays -print)" ]; then
+			log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: Recently checked, skipping..."
+			return
+		fi
+	fi
+
+	artistYoutubeUrls=$(echo "$lidarrArtistData" | jq -r '.links[]? | select((.name|ascii_downcase)=="youtube" or (.url|test("youtube\\.com|youtu\\.be";"i"))) | .url' | sort -u)
+	youtubeSources="$artistYoutubeUrls"
+	youtubeSourceMode="direct"
+	if [ -z "$youtubeSources" ]; then
+		if [ "$enableYoutubeSearchFallback" == "true" ]; then
+			youtubeSourceMode="search"
+			youtubeSources="$lidarrArtistName official music video"
+			log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: No YouTube artist link found, using search fallback..."
+		else
+			log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: No YouTube artist link found, skipping..."
+			touch "$youtubeCompleteLog"
+			chmod 666 "$youtubeCompleteLog"
+			return
+		fi
+	fi
+
+	lidarrArtistTrackTitles=$(curl -s "$arrUrl/api/v1/track?artistId=$lidarrArtistId&apikey=${arrApiKey}" | jq -r '.[]?.title // empty' | sed '/^$/d')
+	youtubeUrlCount=$(echo "$youtubeSources" | wc -l)
+	youtubeUrlLoop=0
+
+	for artistYoutubeUrl in $youtubeSources; do
+		youtubeUrlLoop=$((youtubeUrlLoop + 1))
+		if [ "$youtubeSourceMode" == "search" ]; then
+			searchQuery="$artistYoutubeUrl"
+			log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE SEARCH :: ${youtubeUrlLoop}/${youtubeUrlCount} :: Query: ${searchQuery}"
+			youtubeVideoIds=$(yt-dlp --flat-playlist --playlist-end "$youtubeSearchFallbackMaxResults" --print "%(id)s" "ytsearch${youtubeSearchFallbackMaxResults}:${searchQuery}" 2>/dev/null | sort -u)
+		else
+			log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: ${youtubeUrlLoop}/${youtubeUrlCount} :: Scanning ${artistYoutubeUrl}"
+			youtubeVideoIds=$(yt-dlp --flat-playlist --playlist-end "$youtubeDirectMaxVideosPerArtist" --print "%(id)s" "$artistYoutubeUrl" 2>/dev/null | sort -u)
+		fi
+		if [ -z "$youtubeVideoIds" ]; then
+			if [ "$youtubeSourceMode" == "search" ]; then
+				log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE SEARCH :: No videos returned for query"
+			else
+				log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: No videos returned for this URL"
+			fi
+			continue
+		fi
+
+		youtubeVideoCount=$(echo "$youtubeVideoIds" | wc -l)
+		youtubeVideoLoop=0
+		for youtubeVideoId in $youtubeVideoIds; do
+			youtubeVideoLoop=$((youtubeVideoLoop + 1))
+			videoDownloadUrl="https://www.youtube.com/watch?v=$youtubeVideoId"
+			if [ -n "$cookiesFile" ]; then
+				videoData="$(yt-dlp --cookies "$cookiesFile" -j --no-playlist "$videoDownloadUrl" 2>/dev/null)"
+			else
+				videoData="$(yt-dlp -j --no-playlist "$videoDownloadUrl" 2>/dev/null)"
+			fi
+
+			videoTitle="$(echo "$videoData" | jq -r '.title // empty')"
+			if [ -z "$videoTitle" ]; then
+				log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: ${youtubeVideoLoop}/${youtubeVideoCount} :: Metadata lookup failed, skipping..."
+				continue
+			fi
+
+			videoTitleClean="$(echo "$videoTitle" | sed 's%/%-%g')"
+			videoTitleClean="$(echo "$videoTitleClean" | sed -e "s/[:alpha:][:digit:]._' -/ /g" -e "s/  */ /g" | sed 's/^[.]*//' | sed 's/[.]*$//g' | sed 's/^ *//g' | sed 's/ *$//g')"
+
+			trackMatch="false"
+			if [ -n "$lidarrArtistTrackTitles" ]; then
+				while IFS= read -r lidarrTrackTitle; do
+					if [ -z "$lidarrTrackTitle" ]; then
+						continue
+					fi
+					if echo "$videoTitle" | grep -iF "$lidarrTrackTitle" | read; then
+						trackMatch="true"
+						break
+					fi
+				done <<< "$lidarrArtistTrackTitles"
+			fi
+
+			plexVideoType=""
+			if echo "$videoTitle" | grep -i "official" | grep -i "lyric" | read; then
+				plexVideoType="-lyrics"
+			elif echo "$videoTitle" | grep -i "lyric" | grep -i "video" | read; then
+				plexVideoType="-lyrics"
+			elif echo "$videoTitle" | grep -i "live" | read; then
+				plexVideoType="-live"
+			elif echo "$videoTitle" | grep -i "official" | grep -i "video" | read; then
+				plexVideoType="-video"
+			elif echo "$videoTitle" | grep -i "music" | grep -i "video" | read; then
+				plexVideoType="-video"
+			elif [ "$trackMatch" == "true" ]; then
+				plexVideoType="-video"
+			fi
+
+			if [ -z "$plexVideoType" ]; then
+				log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: ${youtubeVideoLoop}/${youtubeVideoCount} :: ${videoTitle} :: No match rule hit, skipping..."
+				continue
+			fi
+
+			if [ -d "$videoPath/$lidarrArtistFolderNoDisambig" ]; then
+				if [[ -n $(find "$videoPath/$lidarrArtistFolderNoDisambig" -maxdepth 1 -iname "${videoTitleClean}${plexVideoType}.mkv") ]] || [[ -n $(find "$videoPath/$lidarrArtistFolderNoDisambig" -maxdepth 1 -iname "${videoTitleClean}${plexVideoType}.mp4") ]]; then
+					log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: ${youtubeVideoLoop}/${youtubeVideoCount} :: ${videoTitle} :: Previously downloaded, skipping..."
+					continue
+				fi
+			fi
+
+			videoUploadDate="$(echo "$videoData" | jq -r '.upload_date // empty')"
+			videoYear="$(echo "$videoData" | jq -r '.release_year // empty')"
+			if [ -z "$videoYear" ] && [ -n "$videoUploadDate" ]; then
+				videoYear="${videoUploadDate:0:4}"
+			fi
+			if [ -z "$videoYear" ]; then
+				videoYear="0000"
+			fi
+
+			videoThumbnail="$(echo "$videoData" | jq -r '.thumbnail // .thumbnails[-1].url // empty')"
+			if [ -z "$videoThumbnail" ]; then
+				videoThumbnail="https://i.ytimg.com/vi/$youtubeVideoId/hqdefault.jpg"
+			fi
+			videoSource="youtube"
+
+			log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: ${youtubeVideoLoop}/${youtubeVideoCount} :: ${videoTitle} :: Downloading ${videoDownloadUrl}"
+			DownloadVideo "$videoDownloadUrl" "$videoTitleClean" "$plexVideoType" "YOUTUBE DIRECT"
+			if [ "$downloadFailed" = "true" ]; then
+				log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: ${youtubeVideoLoop}/${youtubeVideoCount} :: ${videoTitle} :: Download failed, skipping..."
+				continue
+			fi
+
+			DownloadThumb "$videoThumbnail" "$videoTitleClean" "$plexVideoType" "YOUTUBE DIRECT"
+			VideoProcessWithSMA "YOUTUBE DIRECT" "$videoTitle"
+			VideoTagProcess "$videoTitleClean" "$plexVideoType" "$videoYear" "YOUTUBE DIRECT"
+			VideoNfoWriter "$videoTitleClean" "$plexVideoType" "$videoTitle" "" "youtube" "$videoYear" "YOUTUBE DIRECT" "$videoSource"
+
+			if [ ! -d "$videoPath/$lidarrArtistFolderNoDisambig" ]; then
+				mkdir -p "$videoPath/$lidarrArtistFolderNoDisambig"
+				chmod 777 "$videoPath/$lidarrArtistFolderNoDisambig"
+			fi
+
+			mv "$videoDownloadPath"/incomplete/* "$videoPath/$lidarrArtistFolderNoDisambig"/
+			rm -rf "$videoDownloadPath"/incomplete/*
+		done
+	done
+
+	touch "$youtubeCompleteLog"
+	chmod 666 "$youtubeCompleteLog"
+}
+
 NotifyWebhook () {
 	if [ "$webHook" ]; then
 		content="$1: $2"
@@ -526,7 +716,7 @@ VideoProcess () {
 		artistImvdbSlug=$(basename "$artistImvdbUrl")
 
 		if [ -z "$artistImvdbSlug" ]; then
-			log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: IMVDB :: ERROR :: No IMVDB artist link found, skipping..."
+			log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: IMVDB :: ERROR :: No IMVDB artist link found"
 			# Create log of missing IMVDB url...
 			if [ ! -d "/config/extended/logs/video/imvdb-link-missing" ]; then
 				mkdir -p "/config/extended/logs/video/imvdb-link-missing"
@@ -537,7 +727,11 @@ VideoProcess () {
 				log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: IMVDB :: Logging missing IMVDB artist in folder: /config/extended/logs/video/imvdb-link-missing"
 				touch "/config/extended/logs/video/imvdb-link-missing/${lidarrArtistFolderNoDisambig}--mbid-${lidarrArtistMusicbrainzId}"
 			fi
-			continue
+			if [ "$enableYoutubeDirect" != "true" ]; then
+				log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: Disabled, skipping artist..."
+				continue
+			fi
+			log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: Falling back to YouTube artist links"
 		else
 			log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: IMVDB :: Slug :: $artistImvdbSlug"
 		fi
@@ -557,10 +751,14 @@ VideoProcess () {
 		fi
 
 		if [ -d /config/extended/logs/video/complete ]; then
-			# If completed log file found for artist, end processing and skip...
+			# If completed log file found for artist, end processing and skip unless YouTube direct is enabled
 			if [ -f "/config/extended/logs/video/complete/$lidarrArtistMusicbrainzId" ]; then
-				log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: Music Videos previously downloaded, skipping..."
-				continue
+				if [ "$enableYoutubeDirect" != "true" ]; then
+					log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: Music Videos previously downloaded, skipping..."
+					continue
+				else
+					log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: IMVDB complete marker found, continuing for YouTube direct check..."
+				fi
 			fi
 		fi
 
@@ -664,6 +862,8 @@ VideoProcess () {
 				done
 			fi
 		fi
+
+		YouTubeDirectProcessArtist
 
 		if [ ! -d /config/extended/logs/video ]; then
 			mkdir -p /config/extended/logs/video
