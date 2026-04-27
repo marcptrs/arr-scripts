@@ -1,5 +1,5 @@
 #!/usr/bin/with-contenv bash
-scriptVersion="2.51"
+scriptVersion="2.52"
 scriptName="Audio"
 
 ### Import Settings
@@ -1494,6 +1494,11 @@ SearchProcess () {
 				break
 			fi
 
+			# End lyric loop early on success
+			if [ "$lidarrDownloadImportNotfication" == "true" ]; then
+				break
+			fi
+
 			# Break after all operations are complete
 			if [ "$loopCount" == "$endLoop" ]; then
 				log "$page :: $wantedAlbumListSource :: $processNumber of $wantedListAlbumTotal :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Album Not found"
@@ -1515,13 +1520,20 @@ SearchProcess () {
 }
 
 GetDeezerAlbumInfo () {
+	# Return immediately if already cached and valid
+	if [ -f "/config/extended/cache/deezer/$1.json" ]; then
+		if jq -e . >/dev/null 2>&1 <<<"$(cat /config/extended/cache/deezer/$1.json)"; then
+			albumInfoVerified=true
+			return
+		else
+			rm "/config/extended/cache/deezer/$1.json"
+		fi
+	fi
 	until false
 	do
 		log "$page :: $wantedAlbumListSource :: $processNumber of $wantedListAlbumTotal :: $lidarrArtistName :: $lidarrAlbumTitle :: Getting Album info..."
-		if [ ! -f "/config/extended/cache/deezer/$1.json" ]; then
-			curl -s "https://api.deezer.com/album/$1" -o "/config/extended/cache/deezer/$1.json"
-			sleep $sleepTimer
-		fi
+		curl -s "https://api.deezer.com/album/$1" -o "/config/extended/cache/deezer/$1.json"
+		sleep $sleepTimer
 		if [ -f "/config/extended/cache/deezer/$1.json" ]; then
 			if jq -e . >/dev/null 2>&1 <<<"$(cat /config/extended/cache/deezer/$1.json)"; then
 				log "$page :: $wantedAlbumListSource :: $processNumber of $wantedListAlbumTotal :: $lidarrArtistName :: $lidarrAlbumTitle :: Album info downloaded and verified..."
@@ -1530,9 +1542,7 @@ GetDeezerAlbumInfo () {
 				break
 			else
 				log "$page :: $wantedAlbumListSource :: $processNumber of $wantedListAlbumTotal :: $lidarrArtistName :: $lidarrAlbumTitle :: Error getting album information"
-				if [ -f "/config/extended/cache/deezer/$1.json" ]; then
-					rm "/config/extended/cache/deezer/$1.json"
-				fi
+				rm "/config/extended/cache/deezer/$1.json"
 				log "$page :: $wantedAlbumListSource :: $processNumber of $wantedListAlbumTotal :: $lidarrArtistName :: $lidarrAlbumTitle :: Retrying..."
 			fi
 		else
@@ -1580,6 +1590,21 @@ ArtistDeezerSearch () {
 		deezerAlbumTitle="$(echo "$deezerAlbumData" | jq -r ".title")"
 		deezerAlbumTitleClean="$(echo ${deezerAlbumTitle} | sed -e "s%[^[:alpha:][:digit:]]%%g" -e "s/  */ /g" | sed 's/^[.]*//' | sed  's/[.]*$//g' | sed  's/^ *//g' | sed 's/ *$//g')"
   		deezerAlbumTitleClean="${deezerAlbumTitleClean:0:130}"		
+		# Pre-filter by track count using artist list data (avoids unnecessary full album fetch)
+		deezerAlbumListTrackCount="$(echo "$deezerAlbumData" | jq -r ".nb_tracks // 0")"
+		if [ -n "$deezerAlbumListTrackCount" ] && [ "$deezerAlbumListTrackCount" != "0" ]; then
+			if [ "$deezerAlbumListTrackCount" -gt "$lidarrAlbumReleasesMaxTrackCount" ]; then
+				continue
+			fi
+			if [ "$deezerAlbumListTrackCount" -lt "$lidarrAlbumReleasesMinTrackCount" ]; then
+				continue
+			fi
+		fi
+		# Title similarity pre-check before fetching full album info
+		quickDiff="$(CalcDamerauDistance "$lidarrAlbumReleaseTitleClean" "$deezerAlbumTitleClean")"
+		if [ "$quickDiff" -gt "$((matchDistance * 3))" ] 2>/dev/null; then
+			continue
+		fi
 		GetDeezerAlbumInfo "$deezerAlbumID"
 		deezerAlbumData="$(cat "/config/extended/cache/deezer/$deezerAlbumID.json")"
 		deezerAlbumTrackCount="$(echo "$deezerAlbumData" | jq -r .nb_tracks)"
