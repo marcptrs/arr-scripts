@@ -30,6 +30,14 @@ verifyConfig () {
 		youtubeDirectRefreshDays="3"
 	fi
 
+	if [ -z "$enableYoutubeSearchFallback" ]; then
+		enableYoutubeSearchFallback="false"
+	fi
+
+	if [ -z "$youtubeSearchFallbackMaxResults" ]; then
+		youtubeSearchFallbackMaxResults="15"
+	fi
+
 	if [ "$enableVideo" != "true" ]; then
 		log "Script is not enabled, enable by setting enableVideo to \"true\" by modifying the \"/config/extended.conf\" config file..."
 		log "Sleeping (infinity)"
@@ -102,6 +110,10 @@ Configuration () {
 	if [ "$enableYoutubeDirect" == "true" ]; then
 		log "CONFIG :: YouTube direct max videos per artist: $youtubeDirectMaxVideosPerArtist"
 		log "CONFIG :: YouTube direct refresh days: $youtubeDirectRefreshDays"
+		log "CONFIG :: YouTube search fallback enabled: $enableYoutubeSearchFallback"
+		if [ "$enableYoutubeSearchFallback" == "true" ]; then
+			log "CONFIG :: YouTube search fallback max results: $youtubeSearchFallbackMaxResults"
+		fi
 	fi
 	if [ -f "/config/cookies.txt" ]; then
 		cookiesFile="/config/cookies.txt"
@@ -522,23 +534,41 @@ YouTubeDirectProcessArtist () {
 	fi
 
 	artistYoutubeUrls=$(echo "$lidarrArtistData" | jq -r '.links[]? | select((.name|ascii_downcase)=="youtube" or (.url|test("youtube\\.com|youtu\\.be";"i"))) | .url' | sort -u)
-	if [ -z "$artistYoutubeUrls" ]; then
-		log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: No YouTube artist link found, skipping..."
-		touch "$youtubeCompleteLog"
-		chmod 666 "$youtubeCompleteLog"
-		return
+	youtubeSources="$artistYoutubeUrls"
+	youtubeSourceMode="direct"
+	if [ -z "$youtubeSources" ]; then
+		if [ "$enableYoutubeSearchFallback" == "true" ]; then
+			youtubeSourceMode="search"
+			youtubeSources="$lidarrArtistName official music video"
+			log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: No YouTube artist link found, using search fallback..."
+		else
+			log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: No YouTube artist link found, skipping..."
+			touch "$youtubeCompleteLog"
+			chmod 666 "$youtubeCompleteLog"
+			return
+		fi
 	fi
 
 	lidarrArtistTrackTitles=$(curl -s "$arrUrl/api/v1/track?artistId=$lidarrArtistId&apikey=${arrApiKey}" | jq -r '.[]?.title // empty' | sed '/^$/d')
-	youtubeUrlCount=$(echo "$artistYoutubeUrls" | wc -l)
+	youtubeUrlCount=$(echo "$youtubeSources" | wc -l)
 	youtubeUrlLoop=0
 
-	for artistYoutubeUrl in $artistYoutubeUrls; do
+	for artistYoutubeUrl in $youtubeSources; do
 		youtubeUrlLoop=$((youtubeUrlLoop + 1))
-		log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: ${youtubeUrlLoop}/${youtubeUrlCount} :: Scanning ${artistYoutubeUrl}"
-		youtubeVideoIds=$(yt-dlp --flat-playlist --playlist-end "$youtubeDirectMaxVideosPerArtist" --print "%(id)s" "$artistYoutubeUrl" 2>/dev/null | sort -u)
+		if [ "$youtubeSourceMode" == "search" ]; then
+			searchQuery="$artistYoutubeUrl"
+			log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE SEARCH :: ${youtubeUrlLoop}/${youtubeUrlCount} :: Query: ${searchQuery}"
+			youtubeVideoIds=$(yt-dlp --flat-playlist --playlist-end "$youtubeSearchFallbackMaxResults" --print "%(id)s" "ytsearch${youtubeSearchFallbackMaxResults}:${searchQuery}" 2>/dev/null | sort -u)
+		else
+			log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: ${youtubeUrlLoop}/${youtubeUrlCount} :: Scanning ${artistYoutubeUrl}"
+			youtubeVideoIds=$(yt-dlp --flat-playlist --playlist-end "$youtubeDirectMaxVideosPerArtist" --print "%(id)s" "$artistYoutubeUrl" 2>/dev/null | sort -u)
+		fi
 		if [ -z "$youtubeVideoIds" ]; then
-			log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: No videos returned for this URL"
+			if [ "$youtubeSourceMode" == "search" ]; then
+				log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE SEARCH :: No videos returned for query"
+			else
+				log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: No videos returned for this URL"
+			fi
 			continue
 		fi
 
