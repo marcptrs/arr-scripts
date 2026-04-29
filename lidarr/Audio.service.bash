@@ -1,5 +1,5 @@
 #!/usr/bin/with-contenv bash
-scriptVersion="2.53"
+scriptVersion="2.54"
 scriptName="Audio"
 
 ### Import Settings
@@ -585,11 +585,11 @@ DownloadProcess () {
 		fi
 		if [ -f /config/extended/logs/downloaded/failed/deezer/$1 ]; then
 			# Auto-expire failed download log after retryNotFound days
-			if [ -z "$(find /config/extended/logs/downloaded/failed/deezer/$1 -mtime +${retryNotFound:-90} -print)" ]; then
-				log "$page :: $wantedAlbumListSource :: $processNumber of $wantedListAlbumTotal :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: ERROR :: Previously Attempted Download ($1), retrying in $((retryNotFound - $(( ($(date +%s) - $(stat -c %Y /config/extended/logs/downloaded/failed/deezer/$1)) / 86400 ))) ) days..."
+			if [ -z "$(find /config/extended/logs/downloaded/failed/deezer/$1 -mtime +${failedDownloadRetryDays:-1} -print)" ]; then
+				log "$page :: $wantedAlbumListSource :: $processNumber of $wantedListAlbumTotal :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: ERROR :: Previously Attempted Download ($1), retrying in $((${failedDownloadRetryDays:-1} - $(( ($(date +%s) - $(stat -c %Y /config/extended/logs/downloaded/failed/deezer/$1)) / 86400 )) )) days..."
 				return
 			else
-				log "$page :: $wantedAlbumListSource :: $processNumber of $wantedListAlbumTotal :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Previously failed download ($1) expired after $retryNotFound days, retrying..."
+				log "$page :: $wantedAlbumListSource :: $processNumber of $wantedListAlbumTotal :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Previously failed download ($1) expired after ${failedDownloadRetryDays:-1} days, retrying..."
 				rm /config/extended/logs/downloaded/failed/deezer/$1
 			fi
 		fi
@@ -610,11 +610,11 @@ DownloadProcess () {
 		fi
 		if [ -f /config/extended/logs/downloaded/failed/tidal/$1 ]; then
 			# Auto-expire failed download log after retryNotFound days
-			if [ -z "$(find /config/extended/logs/downloaded/failed/tidal/$1 -mtime +${retryNotFound:-90} -print)" ]; then
-				log "$page :: $wantedAlbumListSource :: $processNumber of $wantedListAlbumTotal :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: ERROR :: Previously Attempted Download ($1), retrying in $((retryNotFound - $(( ($(date +%s) - $(stat -c %Y /config/extended/logs/downloaded/failed/tidal/$1)) / 86400 ))) ) days..."
+			if [ -z "$(find /config/extended/logs/downloaded/failed/tidal/$1 -mtime +${failedDownloadRetryDays:-1} -print)" ]; then
+				log "$page :: $wantedAlbumListSource :: $processNumber of $wantedListAlbumTotal :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: ERROR :: Previously Attempted Download ($1), retrying in $((${failedDownloadRetryDays:-1} - $(( ($(date +%s) - $(stat -c %Y /config/extended/logs/downloaded/failed/tidal/$1)) / 86400 )) )) days..."
 				return
 			else
-				log "$page :: $wantedAlbumListSource :: $processNumber of $wantedListAlbumTotal :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Previously failed download ($1) expired after $retryNotFound days, retrying..."
+				log "$page :: $wantedAlbumListSource :: $processNumber of $wantedListAlbumTotal :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: Previously failed download ($1) expired after ${failedDownloadRetryDays:-1} days, retrying..."
 				rm /config/extended/logs/downloaded/failed/tidal/$1
 			fi
 		fi
