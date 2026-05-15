@@ -1,5 +1,5 @@
 #!/usr/bin/with-contenv bash
-scriptVersion="4.2"
+scriptVersion="4.3"
 scriptName="Video"
 
 ### Import Settings
@@ -591,6 +591,7 @@ YouTubeDirectProcessArtist () {
 
 			videoTitleClean="$(echo "$videoTitle" | sed 's%/%-%g')"
 			videoTitleClean="$(echo "$videoTitleClean" | sed -e "s/[:alpha:][:digit:]._' -/ /g" -e "s/  */ /g" | sed 's/^[.]*//' | sed 's/[.]*$//g' | sed 's/^ *//g' | sed 's/ *$//g')"
+			videoFileName="${lidarrArtistFolderNoDisambig} - ${videoTitleClean}"
 
 			trackMatch="false"
 			if [ -n "$lidarrArtistTrackTitles" ]; then
@@ -626,7 +627,7 @@ YouTubeDirectProcessArtist () {
 			fi
 
 			if [ -d "$videoPath/$lidarrArtistFolderNoDisambig" ]; then
-				if [[ -n $(find "$videoPath/$lidarrArtistFolderNoDisambig" -maxdepth 1 -iname "${videoTitleClean}${plexVideoType}.mkv") ]] || [[ -n $(find "$videoPath/$lidarrArtistFolderNoDisambig" -maxdepth 1 -iname "${videoTitleClean}${plexVideoType}.mp4") ]]; then
+				if [[ -n $(find "$videoPath/$lidarrArtistFolderNoDisambig" -maxdepth 1 -iname "${videoFileName}.mkv") ]] || [[ -n $(find "$videoPath/$lidarrArtistFolderNoDisambig" -maxdepth 1 -iname "${videoFileName}.mp4") ]]; then
 					log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: ${youtubeVideoLoop}/${youtubeVideoCount} :: ${videoTitle} :: Previously downloaded, skipping..."
 					continue
 				fi
@@ -648,16 +649,16 @@ YouTubeDirectProcessArtist () {
 			videoSource="youtube"
 
 			log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: ${youtubeVideoLoop}/${youtubeVideoCount} :: ${videoTitle} :: Downloading ${videoDownloadUrl}"
-			DownloadVideo "$videoDownloadUrl" "$videoTitleClean" "$plexVideoType" "YOUTUBE DIRECT"
+			DownloadVideo "$videoDownloadUrl" "$videoFileName" "$plexVideoType" "YOUTUBE DIRECT"
 			if [ "$downloadFailed" = "true" ]; then
 				log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: YOUTUBE DIRECT :: ${youtubeVideoLoop}/${youtubeVideoCount} :: ${videoTitle} :: Download failed, skipping..."
 				continue
 			fi
 
-			DownloadThumb "$videoThumbnail" "$videoTitleClean" "$plexVideoType" "YOUTUBE DIRECT"
+			DownloadThumb "$videoThumbnail" "$videoFileName" "$plexVideoType" "YOUTUBE DIRECT"
 			VideoProcessWithSMA "YOUTUBE DIRECT" "$videoTitle"
-			VideoTagProcess "$videoTitleClean" "$plexVideoType" "$videoYear" "YOUTUBE DIRECT"
-			VideoNfoWriter "$videoTitleClean" "$plexVideoType" "$videoTitle" "" "youtube" "$videoYear" "YOUTUBE DIRECT" "$videoSource"
+			VideoTagProcess "$videoFileName" "$plexVideoType" "$videoYear" "YOUTUBE DIRECT"
+			VideoNfoWriter "$videoFileName" "$plexVideoType" "$videoTitle" "" "youtube" "$videoYear" "YOUTUBE DIRECT" "$videoSource"
 
 			if [ ! -d "$videoPath/$lidarrArtistFolderNoDisambig" ]; then
 				mkdir -p "$videoPath/$lidarrArtistFolderNoDisambig"
@@ -781,6 +782,7 @@ VideoProcess () {
 					imvdbVideoTitle="$(cat "$imvdbVideoData" | jq -r .song_title)"
 					videoTitleClean="$(echo "$imvdbVideoTitle" | sed 's%/%-%g')"
 					videoTitleClean="$(echo "$videoTitleClean" | sed -e "s/[:alpha:][:digit:]._' -/ /g" -e "s/  */ /g" | sed 's/^[.]*//' | sed 's/[.]*$//g' | sed 's/^ *//g' | sed 's/ *$//g')"
+					videoFileName="${lidarrArtistFolderNoDisambig} - ${videoTitleClean}"
 					imvdbVideoYear=""
 					imvdbVideoYear="$(cat "$imvdbVideoData" | jq -r .year)"
 					imvdbVideoImage="$(cat "$imvdbVideoData" | jq -r '.image.o // .image[0].o // empty')"
@@ -797,17 +799,17 @@ VideoProcess () {
 					plexVideoType="-video"
 
 					if [ -d "$videoPath/$lidarrArtistFolderNoDisambig" ]; then
-						if [ -f "$videoPath/$lidarrArtistFolderNoDisambig/${videoTitleClean}${plexVideoType}.nfo" ]; then
+						if [ -f "$videoPath/$lidarrArtistFolderNoDisambig/${videoFileName}.nfo" ]; then
 							if cat "$videoPath/$lidarrArtistFolderNoDisambig/${videoTitleClean}${plexVideoType}.nfo" | grep "source" | read; then
 								sleep 0
 							else
-								sed -i '$d' "$videoPath/$lidarrArtistFolderNoDisambig/${videoTitleClean}${plexVideoType}.nfo"
-								echo "	<source>youtube</source>" >> "$videoPath/$lidarrArtistFolderNoDisambig/${videoTitleClean}${plexVideoType}.nfo"
-								echo "</musicvideo>" >> "$videoPath/$lidarrArtistFolderNoDisambig/${videoTitleClean}${plexVideoType}.nfo"
-								tidy -w 2000 -i -m -xml "$videoPath/$lidarrArtistFolderNoDisambig/${videoTitleClean}${plexVideoType}.nfo" &>/dev/null
+								sed -i '$d' "$videoPath/$lidarrArtistFolderNoDisambig/${videoFileName}.nfo"
+								echo "	<source>youtube</source>" >> "$videoPath/$lidarrArtistFolderNoDisambig/${videoFileName}.nfo"
+								echo "</musicvideo>" >> "$videoPath/$lidarrArtistFolderNoDisambig/${videoFileName}.nfo"
+								tidy -w 2000 -i -m -xml "$videoPath/$lidarrArtistFolderNoDisambig/${videoFileName}.nfo" &>/dev/null
 							fi
 						fi
-						if [[ -n $(find "$videoPath/$lidarrArtistFolderNoDisambig" -maxdepth 1 -iname "${videoTitleClean}${plexVideoType}.mkv") ]] || [[ -n $(find "$videoPath/$lidarrArtistFolderNoDisambig" -maxdepth 1 -iname "${videoTitleClean}${plexVideoType}.mp4") ]]; then
+						if [[ -n $(find "$videoPath/$lidarrArtistFolderNoDisambig" -maxdepth 1 -iname "${videoFileName}.mkv") ]] || [[ -n $(find "$videoPath/$lidarrArtistFolderNoDisambig" -maxdepth 1 -iname "${videoFileName}.mp4") ]]; then
 							log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: IMVDB :: ${imvdbProcessCount}/${imvdbArtistVideoCount} :: ${imvdbVideoTitle} :: Previously Downloaded, skipping..."
 							continue
 						fi
@@ -841,15 +843,15 @@ VideoProcess () {
 					videoSource="youtube"
 
 					log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: IMVDB :: ${imvdbProcessCount}/${imvdbArtistVideoCount} :: ${imvdbVideoTitle} :: $videoDownloadUrl..."
-					DownloadVideo "$videoDownloadUrl" "$videoTitleClean" "$plexVideoType" "IMVDB"
+					DownloadVideo "$videoDownloadUrl" "$videoFileName" "$plexVideoType" "IMVDB"
 					if [ "$downloadFailed" = "true" ]; then
 						log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: IMVDB :: ${imvdbProcessCount}/${imvdbArtistVideoCount} :: ${imvdbVideoTitle} :: Download failed, skipping..."
 						continue
 					fi
-					DownloadThumb "$imvdbVideoImage" "$videoTitleClean" "$plexVideoType" "IMVDB"
+					DownloadThumb "$imvdbVideoImage" "$videoFileName" "$plexVideoType" "IMVDB"
 					VideoProcessWithSMA "IMVDB" "$imvdbVideoTitle"
-					VideoTagProcess "$videoTitleClean" "$plexVideoType" "$videoYear" "IMVDB"
-					VideoNfoWriter "$videoTitleClean" "$plexVideoType" "$imvdbVideoTitle" "" "imvdb" "$videoYear" "IMVDB" "$videoSource"
+					VideoTagProcess "$videoFileName" "$plexVideoType" "$videoYear" "IMVDB"
+					VideoNfoWriter "$videoFileName" "$plexVideoType" "$imvdbVideoTitle" "" "imvdb" "$videoYear" "IMVDB" "$videoSource"
 
 					if [ ! -d "$videoPath/$lidarrArtistFolderNoDisambig" ]; then
 						mkdir -p "$videoPath/$lidarrArtistFolderNoDisambig"

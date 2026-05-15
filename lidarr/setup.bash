@@ -1,7 +1,7 @@
 #!/usr/bin/with-contenv bash
 set -euo pipefail
 
-scriptVersion="2.0.0"
+scriptVersion="2.1.0"
 SMA_PATH="/usr/local/sma"
 
 setupReady="true"
@@ -12,7 +12,7 @@ else
 fi
 
 # Expected versions of all service scripts (bump these when service files change)
-EXPECTED_setup="2.0.0"
+EXPECTED_setup="2.1.0"
 EXPECTED_functions=""          # universal/functions.bash has no version header
 EXPECTED_Audio="2.55"
 EXPECTED_Video="4.2"
@@ -97,6 +97,7 @@ apk add -U --upgrade --no-cache \
   cmake \
   uv \
   parallel \
+  nodejs \
   npm && \
 echo "*** install freyr client ***" && \
 apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing atomicparsley && \
@@ -105,7 +106,7 @@ echo "*** install python packages ***" && \
 uv pip install --system --upgrade --no-cache-dir --break-system-packages \
   jellyfish \
   beautifulsoup4 \
-  yt-dlp \
+  "yt-dlp[default]" \
   beets \
   yq \
   pyxDamerauLevenshtein \
@@ -123,7 +124,7 @@ uv pip install --system --upgrade --no-cache-dir --break-system-packages \
 
 # Ensure runtime-critical python modules exist even if optional builds fail
 uv pip install --system --upgrade --no-cache-dir --break-system-packages \
-  yt-dlp \
+  "yt-dlp[default]" \
   pyxDamerauLevenshtein \
   colorama \
   requests \
@@ -153,7 +154,16 @@ uv pip install --system --break-system-packages \
 uv pip install --system --break-system-packages beets --no-deps 2>/dev/null || true
 
 # Upgrade yt-dlp to latest (YouTube changes frequently)
-uv pip install --system --break-system-packages --upgrade yt-dlp 2>/dev/null || yt-dlp -U 2>/dev/null || true
+uv pip install --system --break-system-packages --upgrade "yt-dlp[default]" 2>/dev/null || yt-dlp -U 2>/dev/null || true
+
+# Create yt-dlp config to use Node.js for EJS challenge solving (YouTube)
+echo "Creating yt-dlp config for EJS Node.js runtime..."
+mkdir -p /etc/yt-dlp
+cat > /etc/yt-dlp/config.txt << 'EOF'
+# Use Node.js for YouTube EJS challenge solving
+--js-runtimes node
+EOF
+chmod 644 /etc/yt-dlp/config.txt
 
 
 echo "************ setup SMA ************"
