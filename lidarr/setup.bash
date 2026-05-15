@@ -131,8 +131,28 @@ uv pip install --system --upgrade --no-cache-dir --break-system-packages \
   mutagen \
   python-telegram-bot \
   apprise \
-  deemix \
-  beets
+  deemix
+
+# Pre-install beets' core deps (pure Python, no build) for --no-deps fallback
+uv pip install --system --break-system-packages \
+  PyYAML \
+  Jinja2 \
+  Unidecode \
+  musicbrainzngs \
+  discogs-client \
+  confuse \
+  mediafile \
+  packaging \
+  munkres \
+  lap \
+  jellyfish \
+  requests_ratelimiter \
+  pyacoustid \
+  pylast 2>/dev/null || true
+
+# Install beets - try normally first, fallback to no-deps if llvmlite fails
+uv pip install --system --break-system-packages beets 2>/dev/null || \
+  uv pip install --system --break-system-packages beets --no-deps 2>/dev/null || true
 
 
 echo "************ setup SMA ************"
