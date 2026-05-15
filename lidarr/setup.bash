@@ -15,7 +15,7 @@ fi
 EXPECTED_setup="2.0.0"
 EXPECTED_functions=""          # universal/functions.bash has no version header
 EXPECTED_Audio="2.55"
-EXPECTED_Video="4.1"
+EXPECTED_Video="4.2"
 EXPECTED_AutoConfig="3.2"
 EXPECTED_QueueCleaner=""       # tracked separately
 EXPECTED_TidalVideoDownloader="2.1"
@@ -153,7 +153,7 @@ uv pip install --system --break-system-packages \
 uv pip install --system --break-system-packages beets --no-deps 2>/dev/null || true
 
 # Upgrade yt-dlp to latest (YouTube changes frequently)
-uv pip install --system --break-system-packages --upgrade yt-dlp 2>/dev/null || true
+uv pip install --system --break-system-packages --upgrade yt-dlp 2>/dev/null || yt-dlp -U 2>/dev/null || true
 
 
 echo "************ setup SMA ************"
