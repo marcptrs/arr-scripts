@@ -1,7 +1,7 @@
 #!/usr/bin/with-contenv bash
 set -euo pipefail
 
-scriptVersion="1.5.0"
+scriptVersion="1.6.0"
 SMA_PATH="/usr/local/sma"
 
 setupReady="true"
@@ -11,22 +11,58 @@ else
   setupReady="false"
 fi
 
-if [ "${setupversion:-}" == "$scriptVersion" ]; then
+# Expected versions of all service scripts (bump these when service files change)
+EXPECTED_setup="1.6.0"
+EXPECTED_functions=""          # universal/functions.bash has no version header
+EXPECTED_Audio="2.55"
+EXPECTED_Video="4.1"
+EXPECTED_AutoConfig="3.2"
+EXPECTED_QueueCleaner=""       # tracked separately
+EXPECTED_TidalVideoDownloader="2.1"
+EXPECTED_AutoArtistAdder="2.4"
+EXPECTED_UnmappedFilesCleaner="1.4"
+EXPECTED_BeetsTagger="2.0"
+EXPECTED_LyricExtractor="1.6"
+EXPECTED_ArtworkExtractor="1.3"
+
+if [ "${setupversion:-}" == "$EXPECTED_setup" ]; then
   if ! apk --no-cache list | grep installed | grep opus-tools | read; then
     setupReady="false"
   fi
 
-  for requiredFile in \
-    /config/extended/functions \
-    /config/extended/beets-config.yaml \
-    /config/extended.conf \
-    /custom-services.d/Audio \
-    /custom-services.d/Video; do
-    if [ ! -s "$requiredFile" ]; then
-      echo "Setup check: missing required file $requiredFile"
+  # Check each service file's embedded version
+  serviceFiles="
+/custom-services.d/Audio:EXPECTED_Audio
+/custom-services.d/Video:EXPECTED_Video
+/custom-services.d/AutoConfig:EXPECTED_AutoConfig
+/custom-services.d/TidalVideoDownloader:EXPECTED_TidalVideoDownloader
+/custom-services.d/AutoArtistAdder:EXPECTED_AutoArtistAdder
+/custom-services.d/UnmappedFilesCleaner:EXPECTED_UnmappedFilesCleaner
+/config/extended/BeetsTagger.bash:EXPECTED_BeetsTagger
+/config/extended/LyricExtractor.bash:EXPECTED_LyricExtractor
+/config/extended/ArtworkExtractor.bash:EXPECTED_ArtworkExtractor
+/config/extended/functions:EXPECTED_functions
+/config/extended/beets-config.yaml:EXPECTED_functions
+/config/extended.conf:EXPECTED_functions
+"
+
+  while IFS=: read -r filePath varName; do
+    [ -z "$filePath" ] && continue
+    if [ ! -s "$filePath" ]; then
+      echo "Setup check: missing required file $filePath"
       setupReady="false"
+      continue
     fi
-  done
+    # Check embedded version in service scripts
+    expectedVersion="${!varName:-}"
+    if [ -n "$expectedVersion" ]; then
+      actualVersion="$(sed -n 's/.*scriptVersion="\([^"]*\)".*/\1/p' "$filePath" 2>/dev/null | head -n1)"
+      if [ -n "$actualVersion" ] && [ "$actualVersion" != "$expectedVersion" ]; then
+        echo "Setup check: $filePath version mismatch (expected $expectedVersion, got $actualVersion)"
+        setupReady="false"
+      fi
+    fi
+  done <<< "$serviceFiles"
 
   if ! python3 -c 'import colorama, yt_dlp, beets' >/dev/null 2>&1; then
     echo "Setup check: required python packages missing, re-running setup"
@@ -39,7 +75,7 @@ if [ "${setupversion:-}" == "$scriptVersion" ]; then
   fi
 fi
 
-echo "setupversion=$scriptVersion" > /config/setup_version.txt
+echo "setupversion=$EXPECTED_setup" > /config/setup_version.txt
 
 echo "*** install packages ***" && \
 apk add -U --upgrade --no-cache \
