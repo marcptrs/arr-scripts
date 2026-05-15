@@ -152,6 +152,9 @@ uv pip install --system --break-system-packages \
 # Install beets without numba/llvmlite (optional JIT dependency, needs LLVM to build)
 uv pip install --system --break-system-packages beets --no-deps 2>/dev/null || true
 
+# Upgrade yt-dlp to latest (YouTube changes frequently)
+uv pip install --system --break-system-packages --upgrade yt-dlp 2>/dev/null || true
+
 
 echo "************ setup SMA ************"
 if [ -d "${SMA_PATH}"  ]; then
