@@ -1,7 +1,7 @@
 #!/usr/bin/with-contenv bash
 set -euo pipefail
 
-scriptVersion="1.8.0"
+scriptVersion="1.9.0"
 SMA_PATH="/usr/local/sma"
 
 setupReady="true"
@@ -12,7 +12,7 @@ else
 fi
 
 # Expected versions of all service scripts (bump these when service files change)
-EXPECTED_setup="1.8.0"
+EXPECTED_setup="1.9.0"
 EXPECTED_functions=""          # universal/functions.bash has no version header
 EXPECTED_Audio="2.55"
 EXPECTED_Video="4.1"
@@ -93,6 +93,7 @@ apk add -U --upgrade --no-cache \
   opustags \
   python3-dev \
   libc-dev \
+  build-base \
   cmake \
   uv \
   parallel \
@@ -129,26 +130,9 @@ uv pip install --system --upgrade --no-cache-dir --break-system-packages \
   mutagen \
   python-telegram-bot \
   apprise \
-  deemix
+  deemix \
+  beets
 
-# Install beets without numba/llvmlite (avoids cmake build failures)
-# First install beets' core deps that have no native build requirements
-uv pip install --system --break-system-packages \
-  PyYAML \
-  Jinja2 \
-  Unidecode \
-  musicbrainzngs \
-  discogs-client \
-  confuse \
-  mediafile \
-  packaging \
-  munkres \
-  lap \
-  jellyfish \
-  requests_ratelimiter 2>/dev/null || true
-# Then install beets itself without pulling in numba/llvmlite
-uv pip install --system --break-system-packages beets 2>/dev/null || \
-  uv pip install --system --break-system-packages beets --no-deps 2>/dev/null || true
 
 echo "************ setup SMA ************"
 if [ -d "${SMA_PATH}"  ]; then
