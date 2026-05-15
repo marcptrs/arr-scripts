@@ -95,7 +95,6 @@ apk add -U --upgrade --no-cache \
   libc-dev \
   build-base \
   cmake \
-  llvm-dev \
   uv \
   parallel \
   npm && \
@@ -150,9 +149,8 @@ uv pip install --system --break-system-packages \
   pyacoustid \
   pylast 2>/dev/null || true
 
-# Install beets - try normally first, fallback to no-deps if llvmlite fails
-uv pip install --system --break-system-packages beets 2>/dev/null || \
-  uv pip install --system --break-system-packages beets --no-deps 2>/dev/null || true
+# Install beets without numba/llvmlite (optional JIT dependency, needs LLVM to build)
+uv pip install --system --break-system-packages beets --no-deps 2>/dev/null || true
 
 
 echo "************ setup SMA ************"
