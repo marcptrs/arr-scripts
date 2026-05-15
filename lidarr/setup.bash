@@ -1,7 +1,7 @@
 #!/usr/bin/with-contenv bash
 set -euo pipefail
 
-scriptVersion="1.4.9"
+scriptVersion="1.5.0"
 SMA_PATH="/usr/local/sma"
 
 setupReady="true"
