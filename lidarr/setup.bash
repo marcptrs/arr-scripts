@@ -141,7 +141,11 @@ uv pip install --system --break-system-packages \
   discogs-client \
   confuse \
   mediafile \
-  munkres 2>/dev/null || true
+  packaging \
+  munkres \
+  lap \
+  jellyfish \
+  requests_ratelimiter 2>/dev/null || true
 # Then install beets itself without pulling in numba/llvmlite
 uv pip install --system --break-system-packages beets 2>/dev/null || \
   uv pip install --system --break-system-packages beets --no-deps 2>/dev/null || true
