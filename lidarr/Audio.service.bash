@@ -1,5 +1,5 @@
 #!/usr/bin/with-contenv bash
-scriptVersion="2.54"
+scriptVersion="2.55"
 scriptName="Audio"
 
 ### Import Settings
@@ -878,6 +878,20 @@ DownloadProcess () {
 	fi
 }
 
+RunBeet () {
+	if command -v beet >/dev/null 2>&1; then
+		beet "$@"
+		return $?
+	fi
+
+	if command -v python3 >/dev/null 2>&1; then
+		python3 -m beets "$@"
+		return $?
+	fi
+
+	return 127
+}
+
 ProcessWithBeets () {
 	# Input
 	# $1 Download Folder to process
@@ -897,7 +911,7 @@ ProcessWithBeets () {
 	touch "/config/beets-match"
 	sleep 0.5
 
-	beet -c /config/extended/beets-config.yaml -l /config/extended/beets-library.blb -d "$1" import -qC "$1"
+	RunBeet -c /config/extended/beets-config.yaml -l /config/extended/beets-library.blb -d "$1" import -qC "$1"
 	if [ $(find "$1" -type f -regex ".*/.*\.\(flac\|opus\|m4a\|mp3\)" -newer "/config/beets-match" | wc -l) -gt 0 ]; then
 		log "$page :: $wantedAlbumListSource :: $processNumber of $wantedListAlbumTotal :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: SUCCESS: Matched with beets!"
 		log "$page :: $wantedAlbumListSource :: $processNumber of $wantedListAlbumTotal :: $lidarrArtistName :: $lidarrAlbumTitle :: $lidarrAlbumType :: fixing track tags" 
