@@ -1,7 +1,7 @@
 #!/usr/bin/with-contenv bash
 set -euo pipefail
 
-scriptVersion="1.9.0"
+scriptVersion="2.0.0"
 SMA_PATH="/usr/local/sma"
 
 setupReady="true"
@@ -12,7 +12,7 @@ else
 fi
 
 # Expected versions of all service scripts (bump these when service files change)
-EXPECTED_setup="1.9.0"
+EXPECTED_setup="2.0.0"
 EXPECTED_functions=""          # universal/functions.bash has no version header
 EXPECTED_Audio="2.55"
 EXPECTED_Video="4.1"
@@ -95,6 +95,7 @@ apk add -U --upgrade --no-cache \
   libc-dev \
   build-base \
   cmake \
+  llvm-dev \
   uv \
   parallel \
   npm && \
