@@ -257,7 +257,7 @@ DownloadVideo () {
 
 	if echo "$1" | grep -i "youtube" | read; then
 		if [ $videoContainer = mkv ]; then
-			yt-dlp -f "$videoFormat" --no-video-multistreams -o "$videoDownloadPath/incomplete/${2}${3}" $ytdlpConfigurableArgs --embed-subs --sub-lang $youtubeSubtitleLanguage --merge-output-format mkv --remux-video mkv --no-mtime --geo-bypass "$1"
+			yt-dlp -f "$videoFormat" --no-video-multistreams -o "$videoDownloadPath/incomplete/${2}${3}" $ytdlpConfigurableArgs --quiet --embed-subs --sub-lang $youtubeSubtitleLanguage --merge-output-format mkv --remux-video mkv --no-mtime --geo-bypass "$1"
 			if [ -f "$videoDownloadPath/incomplete/${2}${3}.mkv" ]; then
 				chmod 666 "$videoDownloadPath/incomplete/${2}${3}.mkv"
 				downloadFailed=false
@@ -265,7 +265,7 @@ DownloadVideo () {
 				downloadFailed=true
 			fi
 		else
-			yt-dlp --format-sort ext:mp4:m4a --merge-output-format mp4 --no-video-multistreams -o "$videoDownloadPath/incomplete/${2}${3}" $ytdlpConfigurableArgs --embed-subs --sub-lang $youtubeSubtitleLanguage --no-mtime --geo-bypass "$1"
+			yt-dlp --format-sort ext:mp4:m4a --merge-output-format mp4 --no-video-multistreams -o "$videoDownloadPath/incomplete/${2}${3}" $ytdlpConfigurableArgs --quiet --embed-subs --sub-lang $youtubeSubtitleLanguage --no-mtime --geo-bypass "$1"
 			if [ -f "$videoDownloadPath/incomplete/${2}${3}.mp4" ]; then
 				chmod 666 "$videoDownloadPath/incomplete/${2}${3}.mp4"
 				downloadFailed=false
