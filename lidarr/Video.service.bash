@@ -751,19 +751,15 @@ VideoProcess () {
 			ImvdbCache
 		fi
 
-		if [ -d /config/extended/logs/video/complete ]; then
-			# If completed log file found for artist, end processing and skip unless YouTube direct is enabled
-			if [ -f "/config/extended/logs/video/complete/$lidarrArtistMusicbrainzId" ]; then
-				if [ "$enableYoutubeDirect" != "true" ]; then
-					log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: Music Videos previously downloaded, skipping..."
-					continue
-				else
-					log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: IMVDB complete marker found, continuing for YouTube direct check..."
-				fi
+		imvdbCompleteMarker="/config/extended/logs/video/complete/$lidarrArtistMusicbrainzId"
+		if [ -d /config/extended/logs/video/complete ] && [ -f "$imvdbCompleteMarker" ]; then
+			if [ "$enableYoutubeDirect" != "true" ]; then
+				log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: Music Videos previously downloaded, skipping..."
+				continue
+			else
+				log "${processCount}/${lidarrArtistIdsCount} :: $lidarrArtistName :: IMVDB complete marker found, skipping IMVDB, running YouTube direct check..."
 			fi
-		fi
-
-		if [ ! -z "$artistImvdbSlug" ]; then
+		elif [ ! -z "$artistImvdbSlug" ]; then
 			# Remove missing IMVDB log file, now that it is found...
 			if [ -f "/config/extended/logs/video/imvdb-link-missing/${lidarrArtistFolderNoDisambig}--mbid-${lidarrArtistMusicbrainzId}" ]; then
 				rm "/config/extended/logs/video/imvdb-link-missing/${lidarrArtistFolderNoDisambig}--mbid-${lidarrArtistMusicbrainzId}"
